@@ -1,0 +1,6 @@
+C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\Nep5Proxy\bin\Debug\Nep5Proxy.dll
+C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\Nep5Proxy\bin\Debug\Nep5Proxy.pdb
+C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\Nep5Proxy\bin\Debug\Neo.SmartContract.Framework.dll
+C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\Nep5Proxy\obj\Debug\Nep5Proxy.csproj.CopyComplete
+C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\Nep5Proxy\obj\Debug\Nep5Proxy.dll
+C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\Nep5Proxy\obj\Debug\Nep5Proxy.pdb
