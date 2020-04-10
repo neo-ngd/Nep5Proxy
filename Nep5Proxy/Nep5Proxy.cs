@@ -142,28 +142,44 @@ namespace Nep5Proxy
         {
             // check parameters
             if (fromAssetHash.Length != 20)
-                throw new InvalidOperationException("The parameter fromAssetHash SHOULD be 20-byte long.");
+            {
+                Runtime.Notify("The parameter fromAssetHash SHOULD be 20-byte long.");
+                return false;
+            }
             if (fromAddress.Length != 20)
-                throw new InvalidOperationException("The parameter fromAddress SHOULD be 20-byte long.");
+            {
+                Runtime.Notify("The parameter fromAddress SHOULD be 20-byte long.");
+                return false;
+            }
             if (toAddress.Length == 0)
-                throw new InvalidOperationException("The parameter toAddress SHOULD not be empty.");
+            {
+                Runtime.Notify("The parameter toAddress SHOULD not be empty.");
+                return false;
+            }
             
             // get the corresbonding asset on target chain
             var toAssetHash = GetAssetHash(fromAssetHash, toChainId);
             if (toAssetHash.Length == 0)
-                throw new InvalidOperationException("Target chain asset hash not found.");
+            {
+                Runtime.Notify("Target chain asset hash not found.");
+                return false;
+            }
             // get the proxy contract on target chain
             var toContract = GetProxyHash(toChainId);
             if (toContract.Length == 0)
-                throw new InvalidOperationException("Target chain proxy contract not found.");
-            
+            {
+                Runtime.Notify("Target chain proxy contract not found.");
+                return false;
+            }
             // transfer asset from fromAddress to proxy contract address, use dynamic call to call nep5 token's contract "transfer"
             byte[] currentHash = ExecutionEngine.ExecutingScriptHash; // this proxy contract hash
             var nep5Contract = (DynCall)fromAssetHash.ToDelegate();
             bool success = (bool)nep5Contract("transfer", new object[] { fromAddress, currentHash, amount });
             if (!success)
-                throw new InvalidOperationException("Failed to transfer NEP5 token to proxy contract.");
-            
+            {
+                Runtime.Notify("Failed to transfer NEP5 token to proxy contract.");
+                return false;
+            }
             // construct args for proxy contract on target chain
             var inputBytes = SerializeArgs(toAssetHash, toAddress, amount);
             
@@ -173,16 +189,22 @@ namespace Nep5Proxy
             var ccmc = (DynCall)CCMCScriptHash.ToDelegate();
             success = (bool)ccmc("createCrossChainTx", param);
             if (!success)
-                throw new InvalidOperationException("Failed to call CCMC.");
+            {
+                Runtime.Notify("Failed to call CCMC.");
+                return false;
+            }
 
             // finally, update target chain supply
             BigInteger targetChainSupply = GetCrossedAmount(fromAssetHash, toChainId);
             BigInteger newTargetChainSupply = targetChainSupply + amount;
             if (newTargetChainSupply >= GetCrossedLimit(fromAssetHash, toChainId))
-                throw new InvalidOperationException("The parameter amount exceeds the limit.");
+            {
+                Runtime.Notify("The parameter amount exceeds the limit.");
+                return false;
+            }
             StorageMap crossedAmount = Storage.CurrentContext.CreateMap(nameof(crossedAmount));
             crossedAmount.Put(fromAssetHash.Concat(toChainId.AsByteArray()), newTargetChainSupply);
-            //Runtime.Notify("reach line 173");
+            
             return true;
         }
 
@@ -191,31 +213,57 @@ namespace Nep5Proxy
         public static bool Unlock(byte[] inputBytes, byte[] fromProxyContract, BigInteger fromChainId, byte[] caller)
         {
             // only allowed to be called by CCMC
-            if (caller.ToBigInteger() != CCMCScriptHash.ToBigInteger()) return false;
+            if (caller.ToBigInteger() != CCMCScriptHash.ToBigInteger())
+            {
+                Runtime.Notify("Only allowed to be called by CCMC");
+                return false;
+            }
             // check the fromContract is stored, so we can trust it
             if (fromProxyContract.ToBigInteger() != GetProxyHash(fromChainId).ToBigInteger())
-                throw new InvalidOperationException("From proxy contract not found.");
-            
+            {
+                Runtime.Notify("From proxy contract not found.");
+                return false;
+            }
+
             // parse the args bytes constructed in source chain proxy contract, passed by multi-chain
             object[] results = DeserializeArgs(inputBytes);
             var assetHash = (byte[])results[0];
             var toAddress = (byte[])results[1];
             var amount = (BigInteger)results[2];
-            if (assetHash.Length != 20) throw new InvalidOperationException("Asset script hash SHOULD be 20-byte long.");
-            if (toAddress.Length != 20) throw new InvalidOperationException("Account address SHOULD be 20-byte long.");
-            if (amount < 0) throw new InvalidOperationException("Amount SHOULD not be less than 0.");
+            if (assetHash.Length != 20) 
+            { 
+                Runtime.Notify("ToChain Asset script hash SHOULD be 20-byte long.");
+                return false; 
+            }
+            if (toAddress.Length != 20)
+            {
+                Runtime.Notify("ToChain Account address SHOULD be 20-byte long.");
+                return false;
+            }
+            if (amount < 0)
+            {
+                Runtime.Notify("ToChain Amount SHOULD not be less than 0.");
+                return false;
+            }
 
             // transfer asset from proxy contract to toAddress
             byte[] currentHash = ExecutionEngine.ExecutingScriptHash; // this proxy contract hash
             var nep5Contract = (DynCall)assetHash.ToDelegate();
             bool success = (bool)nep5Contract("transfer", new object[] { currentHash, toAddress, amount });
             if (!success)
-                throw new InvalidOperationException("Failed to transfer NEP5 token to toAddress.");
-            
+            {
+                Runtime.Notify("Failed to transfer NEP5 token to toAddress.");
+                return false;
+            }
+
             // update target chain circulating supply
             var supply = GetCrossedAmount(assetHash, fromChainId);
             var newCrossedAmount = supply - amount;
-            if (newCrossedAmount < 0) throw new InvalidOperationException("Insufficient crossed amount.");
+            if (newCrossedAmount < 0)
+            {
+                Runtime.Notify("Insufficient crossed amount.");
+                return false;
+            }
             StorageMap crossedAmount = Storage.CurrentContext.CreateMap(nameof(crossedAmount));
             crossedAmount.Put(assetHash, newCrossedAmount);
 
@@ -243,7 +291,10 @@ namespace Nep5Proxy
         public static BigInteger TotalLock(byte[] assetHash)
         {
             if (assetHash.Length != 20)
-                throw new InvalidOperationException("The parameter assetHash SHOULD be 20-byte long.");
+            {
+                Runtime.Notify("The parameter assetHash SHOULD be 20-byte long.");
+                return 0;
+            }
             byte[] currentHash = ExecutionEngine.ExecutingScriptHash; // this proxy contract hash
             var nep5Contract = (DynCall)assetHash.ToDelegate();
             var balance = (BigInteger)nep5Contract("balanceOf", new object[] { currentHash });
