@@ -19,11 +19,10 @@ namespace Nep5Proxy
         //[Appcall("50f8b57cccfc4eaf635e1fae9466b650b6958a2a")] // CCMC scriptHash
         //public static extern object CCMC(string method, object[] args);
 
-        //private static readonly byte[] CCMCScriptHash = "3138e4609f20c8301c04dbbae30c12383e163a71".HexToBytes().Reverse();
-        private static readonly byte[] CCMCScriptHash = "6a18abe45e10f0ddd6acab2fe4ee72f13a3704de".HexToBytes();
+        private static readonly byte[] CCMCScriptHash = "".HexToBytes();
         private delegate object DynCall(string method, object[] args); // dynamic call
 
-        private static readonly byte[] Operator = "AQzRMe3zyGS8W177xLJfewRRQZY2kddMun".ToScriptHash(); // Operator address
+        private static readonly byte[] Operator = "".ToScriptHash(); // Operator address
 
         // StorageMap proxyHash, key: toChainId, value: byte[]
         // StorageMap assetHash, key: fromAssetHash + toChainId, value: byte[]
@@ -187,7 +186,7 @@ namespace Nep5Proxy
             var param = new object[] { toChainId, toContract, "unlock", inputBytes };
             // dynamic call CCMC
             var ccmc = (DynCall)CCMCScriptHash.ToDelegate();
-            success = (bool)ccmc("createCrossChainTx", param);
+            success = (bool)ccmc("CrossChain", param);
             if (!success)
             {
                 Runtime.Notify("Failed to call CCMC.");
@@ -218,6 +217,7 @@ namespace Nep5Proxy
                 Runtime.Notify("Only allowed to be called by CCMC");
                 return false;
             }
+
             // check the fromContract is stored, so we can trust it
             if (fromProxyContract.ToBigInteger() != GetProxyHash(fromChainId).ToBigInteger())
             {
