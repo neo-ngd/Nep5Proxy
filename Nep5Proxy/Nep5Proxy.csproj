@@ -63,8 +63,6 @@
     <ConvertTask DataSource="$(TargetPath)" />
   </Target>
   <PropertyGroup>
-    <PostBuildEvent>neon Nep5Proxy.dll
-copy C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\Nep5Proxy\bin\Debug\Nep5Proxy.avm C:\Users\Qrz\Documents\chenzhitong\Neo.2.10.3\Neo.2.10.3\GUI2\Nep5Proxy.avm
-copy C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\Nep5Proxy\bin\Debug\Nep5Proxy.abi.json C:\Users\Qrz\Documents\chenzhitong\Neo.2.10.3\Neo.2.10.3\GUI2\Nep5Proxy.abi.json</PostBuildEvent>
+    <PostBuildEvent>neon Nep5Proxy.dll</PostBuildEvent>
   </PropertyGroup>
 </Project>

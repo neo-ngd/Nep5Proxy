@@ -211,16 +211,25 @@ namespace Nep5Proxy
         [DisplayName("unlock")]
         public static bool Unlock(byte[] inputBytes, byte[] fromProxyContract, BigInteger fromChainId, byte[] caller)
         {
-            // only allowed to be called by CCMC
-            if (caller.ToBigInteger() != CCMCScriptHash.ToBigInteger())
+            //only allowed to be called by CCMC
+            if (caller.AsBigInteger() != CCMCScriptHash.AsBigInteger())
             {
                 Runtime.Notify("Only allowed to be called by CCMC");
                 return false;
             }
 
+            Runtime.Notify(fromProxyContract);
+            Runtime.Notify(fromChainId);
+            byte[] storedProxy = GetProxyHash(fromChainId);
+            Runtime.Notify(storedProxy);
+
             // check the fromContract is stored, so we can trust it
-            if (fromProxyContract.ToBigInteger() != GetProxyHash(fromChainId).ToBigInteger())
+            if (fromProxyContract.AsBigInteger() != storedProxy.AsBigInteger())
             {
+                Runtime.Notify(fromProxyContract.ToBigInteger());
+                Runtime.Notify(storedProxy.ToBigInteger());
+                Runtime.Notify(fromProxyContract.AsBigInteger());
+                Runtime.Notify(storedProxy.AsBigInteger());
                 Runtime.Notify("From proxy contract not found.");
                 return false;
             }
@@ -301,7 +310,7 @@ namespace Nep5Proxy
             return balance;
         }
 
-        // used to upgrade CGAS/CNEO contract, todo
+        // used to upgrade
         [DisplayName("upgrade")]
         public static bool Upgrade(byte[] newScript, byte[] paramList, byte returnType, ContractPropertyState cps, 
             string name, string version, string author, string email, string description)
