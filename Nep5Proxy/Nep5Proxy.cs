@@ -19,15 +19,23 @@ namespace Nep5Proxy
         //[Appcall("50f8b57cccfc4eaf635e1fae9466b650b6958a2a")] // CCMC scriptHash
         //public static extern object CCMC(string method, object[] args);
 
+        // Constants
         private static readonly byte[] CCMCScriptHash = "".HexToBytes();
-        private delegate object DynCall(string method, object[] args); // dynamic call
-
         private static readonly byte[] Operator = "".ToScriptHash(); // Operator address
 
+        // Dynamic Call
+        private delegate object DynCall(string method, object[] args); // dynamic call
+        
+        // Events
+        public static event Action<byte[], BigInteger, byte[], byte[], byte[], BigInteger> LockEvent;
+        public static event Action<byte[], byte[], BigInteger> UnlockEvent;
+
+        // ---------------------StorageMap key definitions----------------------------
         // StorageMap proxyHash, key: toChainId, value: byte[]
         // StorageMap assetHash, key: fromAssetHash + toChainId, value: byte[]
         // StorageMap crossedAmount, key: fromAssetHash + toChainId, value: BigInteger
         // StorageMap crossedLimit, key: fromAssetHash + toChainId, value: BigInteger
+        // ---------------------------------------------------------------------------
 
         public static object Main(string method, object[] args)
         {
@@ -163,6 +171,7 @@ namespace Nep5Proxy
                 Runtime.Notify("Target chain asset hash not found.");
                 return false;
             }
+
             // get the proxy contract on target chain
             var toContract = GetProxyHash(toChainId);
             if (toContract.Length == 0)
@@ -170,6 +179,18 @@ namespace Nep5Proxy
                 Runtime.Notify("Target chain proxy contract not found.");
                 return false;
             }
+
+            // update target chain supply
+            BigInteger targetChainSupply = GetCrossedAmount(fromAssetHash, toChainId);
+            BigInteger newTargetChainSupply = targetChainSupply + amount;
+            if (newTargetChainSupply >= GetCrossedLimit(fromAssetHash, toChainId))
+            {
+                Runtime.Notify("The parameter amount exceeds the limit.");
+                return false;
+            }
+            StorageMap crossedAmount = Storage.CurrentContext.CreateMap(nameof(crossedAmount));
+            crossedAmount.Put(fromAssetHash.Concat(toChainId.AsByteArray()), newTargetChainSupply);
+            
             // transfer asset from fromAddress to proxy contract address, use dynamic call to call nep5 token's contract "transfer"
             byte[] currentHash = ExecutionEngine.ExecutingScriptHash; // this proxy contract hash
             var nep5Contract = (DynCall)fromAssetHash.ToDelegate();
@@ -179,9 +200,9 @@ namespace Nep5Proxy
                 Runtime.Notify("Failed to transfer NEP5 token to proxy contract.");
                 return false;
             }
+
             // construct args for proxy contract on target chain
             var inputBytes = SerializeArgs(toAssetHash, toAddress, amount);
-            
             // constrct params for CCMC 
             var param = new object[] { toChainId, toContract, "unlock", inputBytes };
             // dynamic call CCMC
@@ -193,17 +214,8 @@ namespace Nep5Proxy
                 return false;
             }
 
-            // finally, update target chain supply
-            BigInteger targetChainSupply = GetCrossedAmount(fromAssetHash, toChainId);
-            BigInteger newTargetChainSupply = targetChainSupply + amount;
-            if (newTargetChainSupply >= GetCrossedLimit(fromAssetHash, toChainId))
-            {
-                Runtime.Notify("The parameter amount exceeds the limit.");
-                return false;
-            }
-            StorageMap crossedAmount = Storage.CurrentContext.CreateMap(nameof(crossedAmount));
-            crossedAmount.Put(fromAssetHash.Concat(toChainId.AsByteArray()), newTargetChainSupply);
-            
+            LockEvent(fromAssetHash, toChainId, toAssetHash, fromAddress, toAddress, amount);
+
             return true;
         }
 
@@ -218,18 +230,14 @@ namespace Nep5Proxy
                 return false;
             }
 
-            Runtime.Notify(fromProxyContract);
-            Runtime.Notify(fromChainId);
             byte[] storedProxy = GetProxyHash(fromChainId);
-            Runtime.Notify(storedProxy);
-
+            
             // check the fromContract is stored, so we can trust it
             if (fromProxyContract.AsBigInteger() != storedProxy.AsBigInteger())
             {
-                Runtime.Notify(fromProxyContract.ToBigInteger());
-                Runtime.Notify(storedProxy.ToBigInteger());
-                Runtime.Notify(fromProxyContract.AsBigInteger());
-                Runtime.Notify(storedProxy.AsBigInteger());
+                Runtime.Notify(fromProxyContract);
+                Runtime.Notify(fromChainId);
+                Runtime.Notify(storedProxy);
                 Runtime.Notify("From proxy contract not found.");
                 return false;
             }
@@ -255,6 +263,17 @@ namespace Nep5Proxy
                 return false;
             }
 
+            // update target chain circulating supply
+            var crossed = GetCrossedAmount(assetHash, fromChainId);
+            var newCrossedAmount = crossed - amount;
+            if (newCrossedAmount < 0)
+            {
+                Runtime.Notify("Insufficient crossed amount.");
+                return false;
+            }
+            StorageMap crossedAmount = Storage.CurrentContext.CreateMap(nameof(crossedAmount));
+            crossedAmount.Put(assetHash.Concat(fromChainId.AsByteArray()), newCrossedAmount);
+
             // transfer asset from proxy contract to toAddress
             byte[] currentHash = ExecutionEngine.ExecutingScriptHash; // this proxy contract hash
             var nep5Contract = (DynCall)assetHash.ToDelegate();
@@ -265,16 +284,7 @@ namespace Nep5Proxy
                 return false;
             }
 
-            // update target chain circulating supply
-            var supply = GetCrossedAmount(assetHash, fromChainId);
-            var newCrossedAmount = supply - amount;
-            if (newCrossedAmount < 0)
-            {
-                Runtime.Notify("Insufficient crossed amount.");
-                return false;
-            }
-            StorageMap crossedAmount = Storage.CurrentContext.CreateMap(nameof(crossedAmount));
-            crossedAmount.Put(assetHash, newCrossedAmount);
+            UnlockEvent(assetHash, toAddress, amount);
 
             return true;
         }
@@ -310,7 +320,7 @@ namespace Nep5Proxy
             return balance;
         }
 
-        // used to upgrade
+        // used to upgrade this proxy contract
         [DisplayName("upgrade")]
         public static bool Upgrade(byte[] newScript, byte[] paramList, byte returnType, ContractPropertyState cps, 
             string name, string version, string author, string email, string description)
@@ -321,14 +331,14 @@ namespace Nep5Proxy
             return true;
         }
 
-        [DisplayName("testDynCall")]
-        public static bool TestDynCall(byte[] fromAssetHash, byte[] fromAddress, BigInteger amount)
-        {
-            byte[] currentHash = ExecutionEngine.ExecutingScriptHash; // this proxy contract hash
-            var nep5Contract = (DynCall)fromAssetHash.ToDelegate();
-            bool success = (bool)nep5Contract("transfer", new object[] { fromAddress, currentHash, amount });
-            return success;
-        }
+        //[DisplayName("testDynCall")]
+        //public static bool TestDynCall(byte[] fromAssetHash, byte[] fromAddress, BigInteger amount)
+        //{
+        //    byte[] currentHash = ExecutionEngine.ExecutingScriptHash; // this proxy contract hash
+        //    var nep5Contract = (DynCall)fromAssetHash.ToDelegate();
+        //    bool success = (bool)nep5Contract("transfer", new object[] { fromAddress, currentHash, amount });
+        //    return success;
+        //}
 
         //[DisplayName("testDynCall2")]
         //public static bool TestDynCall2(byte[] ccmcHash, BigInteger toChainId, byte[] toProxyContract, string methodName, byte[] inputBytes)
@@ -340,8 +350,8 @@ namespace Nep5Proxy
         //    return success;
         //}
 
-        [DisplayName("testSerialize")]
-        public static byte[] SerializeArgs(byte[] assetHash, byte[] address, BigInteger amount)
+        //[DisplayName("testSerialize")]
+        private static byte[] SerializeArgs(byte[] assetHash, byte[] address, BigInteger amount)
         {
             var buffer = new byte[] { };
             buffer = WriteVarBytes(assetHash, buffer);
@@ -350,8 +360,8 @@ namespace Nep5Proxy
             return buffer;
         }
 
-        [DisplayName("testDeserialize")]
-        public static object[] DeserializeArgs(byte[] buffer)
+        //[DisplayName("testDeserialize")]
+        private static object[] DeserializeArgs(byte[] buffer)
         {
             var offset = 0;
             var res = ReadVarBytes(buffer, offset);
