@@ -163,6 +163,11 @@ namespace Nep5Proxy
                 Runtime.Notify("The parameter toAddress SHOULD not be empty.");
                 return false;
             }
+            if (amount < 0)
+            {
+                Runtime.Notify("The parameter amount SHOULD not be less than 0.");
+                return false;
+            }
             
             // get the corresbonding asset on target chain
             var toAssetHash = GetAssetHash(fromAssetHash, toChainId);
@@ -219,9 +224,14 @@ namespace Nep5Proxy
             return true;
         }
 
+#if DEBUG
+        [DisplayName("unlock")] //Only for ABI file
+        public static bool Unlock(byte[] inputBytes, byte[] fromProxyContract, BigInteger fromChainId) => true;
+#endif
+
+        // Methods of actual execution
         // used to unlock asset from proxy contract
-        [DisplayName("unlock")]
-        public static bool Unlock(byte[] inputBytes, byte[] fromProxyContract, BigInteger fromChainId, byte[] caller)
+        private static bool Unlock(byte[] inputBytes, byte[] fromProxyContract, BigInteger fromChainId, byte[] caller)
         {
             //only allowed to be called by CCMC
             if (caller.AsBigInteger() != CCMCScriptHash.AsBigInteger())
