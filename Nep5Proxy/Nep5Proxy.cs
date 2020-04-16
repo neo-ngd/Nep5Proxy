@@ -188,7 +188,7 @@ namespace Nep5Proxy
             // update target chain supply
             BigInteger targetChainSupply = GetCrossedAmount(fromAssetHash, toChainId);
             BigInteger newTargetChainSupply = targetChainSupply + amount;
-            if (newTargetChainSupply >= GetCrossedLimit(fromAssetHash, toChainId))
+            if (newTargetChainSupply > GetCrossedLimit(fromAssetHash, toChainId))
             {
                 Runtime.Notify("The parameter amount exceeds the limit.");
                 return false;
