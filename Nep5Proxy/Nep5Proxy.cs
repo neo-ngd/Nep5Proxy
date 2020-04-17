@@ -360,16 +360,8 @@ namespace Nep5Proxy
         //    return success;
         //}
 
-        //[DisplayName("testSerialize")]
-        private static byte[] SerializeArgs(byte[] assetHash, byte[] address, BigInteger amount)
-        {
-            var buffer = new byte[] { };
-            buffer = WriteVarBytes(assetHash, buffer);
-            buffer = WriteVarBytes(address, buffer);
-            buffer = WriteVarInt(amount, buffer);
-            return buffer;
-        }
 
+        #region For Deserialization
         //[DisplayName("testDeserialize")]
         private static object[] DeserializeArgs(byte[] buffer)
         {
@@ -380,19 +372,32 @@ namespace Nep5Proxy
             res = ReadVarBytes(buffer, (int)res[1]);
             var toAddress = res[0];
 
-            res = ReadVarInt(buffer, (int)res[1]);
+            res = ReadUint255(buffer, (int)res[1]);
             var amount = res[0];
 
             return new object[] { assetAddress, toAddress, amount };
         }
 
+        private static object[] ReadUint255(byte[] buffer, int offset)
+        {
+            if (offset + 32 > buffer.Length)
+            {
+                Runtime.Notify("Length is not long enough");
+                return new object[] { 0, -1 };
+            }
+            return new object[] { buffer.Range(offset, 32).ToBigInteger(), offset + 32 };
+        }
 
         // return [BigInteger: value, int: offset]
         private static object[] ReadVarInt(byte[] buffer, int offset)
         {
             var res = ReadBytes(buffer, offset, 1); // read the first byte
             var fb = (byte[])res[0];
-            if (fb.Length != 1) throw new ArgumentOutOfRangeException();
+            if (fb.Length != 1)
+            {
+                Runtime.Notify("Wrong length");
+                return new object[] { 0, -1 };
+            }
             var newOffset = (int)res[1];
             if (fb == new byte[] { 0xFD })
             {
@@ -426,6 +431,29 @@ namespace Nep5Proxy
         {
             if (offset + count > buffer.Length) throw new ArgumentOutOfRangeException();
             return new object[] { buffer.Range(offset, count), offset + count };
+        }
+        #endregion
+
+        #region For Serialization
+        //[DisplayName("testSerialize")]
+        private static byte[] SerializeArgs(byte[] assetHash, byte[] address, BigInteger amount)
+        {
+            var buffer = new byte[] { };
+            buffer = WriteVarBytes(assetHash, buffer);
+            buffer = WriteVarBytes(address, buffer);
+            buffer = WriteUint255(amount, buffer);
+            return buffer;
+        }
+
+        private static byte[] WriteUint255(BigInteger value, byte[] source)
+        {
+            if (value < 0 || value > new BigInteger("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f".HexToBytes()))
+            {
+                Runtime.Notify("Value out of range of uint255");
+                return source;
+            }
+            var v = PadRight(value.ToByteArray(), 32);
+            return source.Concat(v); // no need to concat length, fix 32 bytes
         }
 
         private static byte[] WriteVarInt(BigInteger value, byte[] Source)
@@ -468,12 +496,13 @@ namespace Nep5Proxy
         {
             var l = value.Length;
             if (l > length)
-                return value;
+                return value.Range(0, length);
             for (int i = 0; i < length - l; i++)
             {
                 value = value.Concat(new byte[] { 0x00 });
             }
             return value;
         }
+        #endregion
     }
 }
