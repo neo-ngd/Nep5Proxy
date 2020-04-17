@@ -8,8 +8,8 @@
     <ProjectGuid>{477DA131-A3BF-4EDF-9956-99142C6E3760}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>MockNep5</RootNamespace>
-    <AssemblyName>MockNep5</AssemblyName>
+    <RootNamespace>ETHX</RootNamespace>
+    <AssemblyName>ETHX</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -63,8 +63,7 @@
     <ConvertTask DataSource="$(TargetPath)" />
   </Target>
   <PropertyGroup>
-    <PostBuildEvent>neon MockNep5.dll
-copy C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockNep5\bin\Debug\MockNep5.avm C:\Users\Qrz\Documents\chenzhitong\Neo.2.10.3\Neo.2.10.3\GUI2\MockNep5.avm
-copy C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockNep5\bin\Debug\MockNep5.abi.json C:\Users\Qrz\Documents\chenzhitong\Neo.2.10.3\Neo.2.10.3\GUI2\MockNep5.abi.json</PostBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
 </Project>

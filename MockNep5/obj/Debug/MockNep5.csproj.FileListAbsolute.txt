@@ -1,6 +1,0 @@
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockNep5\bin\Debug\MockNep5.dll
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockNep5\bin\Debug\MockNep5.pdb
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockNep5\bin\Debug\Neo.SmartContract.Framework.dll
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockNep5\obj\Debug\MockNep5.csproj.CopyComplete
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockNep5\obj\Debug\MockNep5.dll
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockNep5\obj\Debug\MockNep5.pdb
