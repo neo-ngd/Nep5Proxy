@@ -85,9 +85,8 @@ namespace Nep5Proxy
                 //if (method == "testDeserialize")
                 //{
                 //    var x = (byte[])args[0];
-                //    Runtime.Notify(x.AsString());
+                //    Runtime.Notify(x);
                 //    return DeserializeArgs(x);
-                //    //return DeserializeArgs((byte[])args[0]);
                 //}
                 //if (method == "testSerialize")
                 //    return SerializeArgs((byte[])args[0], (byte[])args[1], (BigInteger)args[2]);
@@ -447,7 +446,7 @@ namespace Nep5Proxy
 
         private static byte[] WriteUint255(BigInteger value, byte[] source)
         {
-            if (value < 0 || value > new BigInteger("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f".HexToBytes()))
+            if (value < 0)
             {
                 Runtime.Notify("Value out of range of uint255");
                 return source;
