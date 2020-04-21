@@ -23,7 +23,8 @@ namespace MockNep5
         private static readonly byte[] ZERO_ADDRESS = "0000000000000000000000000000000000000000".HexToBytes();
 
         //private const ulong factor = 100000000; //decided by Decimals()
-        private const ulong total_amount = 1000000000000000000; // total token amount, 1*10^18
+        private static readonly BigInteger total_amount = new BigInteger("000000e4d20cc8dcd2b75200".HexToBytes()); // total token amount, 1*10^18
+        //private const ulong max = ulong.MaxValue; //18446744073709551615
 
         // StorageMap contract, key: "totalSupply", value: total_amount
         // StorageMap contract, key: "owner", value: owner, byte[20], legal address
@@ -145,7 +146,7 @@ namespace MockNep5
         public static byte Decimals() => 18;
 
         [DisplayName("name")]
-        public static string Name() => "ETHX"; //name of the token
+        public static string Name() => "ETHX_NEP5"; //name of the token
 
         [DisplayName("symbol")]
         public static string Symbol() => "ETHX"; //symbol of the token
