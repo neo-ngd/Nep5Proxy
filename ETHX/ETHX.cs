@@ -18,11 +18,17 @@ namespace MockNep5
     {
         [DisplayName("transfer")]
         public static event Action<byte[], byte[], BigInteger> Transferred;
+        public static event Action<BigInteger, byte[], byte[], BigInteger> LockEvent;
+        public static event Action<byte[], BigInteger> UnlockEvent;
+
+        // Dynamic Call
+        private delegate object DynCall(string method, object[] args); // dynamic call
+
+        private static readonly byte[] CCMCScriptHash = "".HexToBytes();
 
         private static readonly byte[] Owner = "".ToScriptHash(); //Owner Address
         private static readonly byte[] ZERO_ADDRESS = "0000000000000000000000000000000000000000".HexToBytes();
 
-        //private const ulong factor = 100000000; //decided by Decimals()
         private static readonly BigInteger total_amount = new BigInteger("000000e4d20cc8dcd2b75200".HexToBytes()); // total token amount, 1*10^18
         //private const ulong max = ulong.MaxValue; //18446744073709551615
 
@@ -46,6 +52,16 @@ namespace MockNep5
                     return Deploy();
                 if (method == "isDeployed")
                     return IsDeployed();
+
+                // Cross chain
+                if (method == "bindContractAddress")
+                    return BindContractAddress((BigInteger)args[0], (byte[])args[1]);
+                if (method == "getContractAddress")
+                    return GetContractAddress((BigInteger)args[0]);
+                if (method == "lock")
+                    return Lock((byte[])args[0], (BigInteger)args[1], (byte[])args[2], (BigInteger)args[3]);
+                if (method == "unlock")
+                    return Unlock((byte[])args[0], (byte[])args[1], (BigInteger)args[2], callscript);
 
                 // NEP5 standard methods
                 if (method == "balanceOf") return BalanceOf((byte[])args[0]);
@@ -126,6 +142,151 @@ namespace MockNep5
             StorageMap contract = Storage.CurrentContext.CreateMap(nameof(contract));
             byte[] total_supply = contract.Get("totalSupply");
             return total_supply.Length != 0;
+        }
+        #endregion
+
+        #region -----Cross chain-----
+        [DisplayName("bindContractAddress")]
+        public static bool BindContractAddress(BigInteger toChainId, byte[] contractAddr)
+        {
+            if (!Runtime.CheckWitness(GetOwner()))
+            {
+                Runtime.Notify("Only owner can deploy this contract.");
+                return false;
+            }
+            StorageMap assetHash = Storage.CurrentContext.CreateMap(nameof(assetHash));
+            assetHash.Put(toChainId.AsByteArray(), contractAddr);
+            return true;
+        }
+
+        [DisplayName("getContractAddress")]
+        public static byte[] GetContractAddress(BigInteger toChainId)
+        {
+            StorageMap assetHash = Storage.CurrentContext.CreateMap(nameof(assetHash));
+            return assetHash.Get(toChainId.AsByteArray());
+        }
+
+        [DisplayName("lock")]
+        public static bool Lock(byte[] fromAddress, BigInteger toChainId, byte[] toAddress, BigInteger amount)
+        {
+            // check parameters
+            if (!IsAddress(fromAddress))
+            {
+                Runtime.Notify("The parameter fromAddress SHOULD be a legal address.");
+                return false;
+            }
+            if (toAddress.Length == 0)
+            {
+                Runtime.Notify("The parameter toAddress SHOULD not be empty.");
+                return false;
+            }
+            if (amount < 0)
+            {
+                Runtime.Notify("The parameter amount SHOULD not be less than 0.");
+                return false;
+            }
+            // more checks
+            if (!Runtime.CheckWitness(fromAddress))
+            {
+                Runtime.Notify("Authorization failed.");
+                return false;
+            }
+            if (IsPaused())
+            {
+                Runtime.Notify("The contract is paused.");
+                return false;
+            }
+
+            // lock asset
+            StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
+            var balance = asset.Get(fromAddress).AsBigInteger();
+            if (balance < amount)
+            {
+                Runtime.Notify("Not enough balance to lock.");
+                return false;
+            }
+            StorageMap contract = Storage.CurrentContext.CreateMap(nameof(contract));
+            var totalSupply = contract.Get("totalSupply").AsBigInteger();
+            if (totalSupply < amount)
+            {
+                Runtime.Notify("Not enough supply to lock.");
+                return false;
+            }
+            asset.Put(fromAddress, balance - amount);
+            contract.Put("totalSupply", totalSupply - amount);
+
+            // construct args for the corresponding asset contract on target chain
+            var inputBytes = SerializeArgs(toAddress, amount);
+            var toContract = GetContractAddress(toChainId);
+            // constrct params for CCMC 
+            var param = new object[] { toChainId, toContract, "unlock", inputBytes };
+
+            // dynamic call CCMC
+            var ccmc = (DynCall)CCMCScriptHash.ToDelegate();
+            var success = (bool)ccmc("CrossChain", param);
+            if (!success)
+            {
+                Runtime.Notify("Failed to call CCMC.");
+                return false;
+            }
+
+            LockEvent(toChainId, fromAddress, toAddress, amount);
+            return true;
+        }
+
+#if DEBUG
+        [DisplayName("unlock")] //Only for ABI file
+        public static bool Unlock(byte[] inputBytes, byte[] fromContract, BigInteger fromChainId) => true;
+#endif
+
+        // Methods of actual execution
+        // used to unlock asset from proxy contract
+        private static bool Unlock(byte[] inputBytes, byte[] fromContract, BigInteger fromChainId, byte[] caller)
+        {
+            //only allowed to be called by CCMC
+            if (caller.AsBigInteger() != CCMCScriptHash.AsBigInteger())
+            {
+                Runtime.Notify("Only allowed to be called by CCMC");
+                return false;
+            }
+
+            byte[] storedContract = GetContractAddress(fromChainId);
+
+            // check the fromContract is stored, so we can trust it
+            if (fromContract.AsBigInteger() != storedContract.AsBigInteger())
+            {
+                Runtime.Notify(fromContract);
+                Runtime.Notify(fromChainId);
+                Runtime.Notify(storedContract);
+                Runtime.Notify("From contract address not found.");
+                return false;
+            }
+
+            // parse the args bytes constructed in source chain proxy contract, passed by multi-chain
+            object[] results = DeserializeArgs(inputBytes);
+            var toAddress = (byte[])results[0];
+            var amount = (BigInteger)results[1];
+            if (!IsAddress(toAddress))
+            {
+                Runtime.Notify("ToChain Account address SHOULD be a legal address.");
+                return false;
+            }
+            if (amount < 0)
+            {
+                Runtime.Notify("ToChain Amount SHOULD not be less than 0.");
+                return false;
+            }
+
+            // unlock asset 
+            StorageMap asset = Storage.CurrentContext.CreateMap(nameof(asset));
+            var balance = asset.Get(toAddress).AsBigInteger();
+            StorageMap contract = Storage.CurrentContext.CreateMap(nameof(contract));
+            var totalSupply = contract.Get("totalSupply").AsBigInteger();
+            asset.Put(toAddress, balance + amount);
+            contract.Put("totalSupply", totalSupply + amount);
+
+            UnlockEvent(toAddress, amount);
+            return true;
         }
         #endregion
 
@@ -311,6 +472,146 @@ namespace MockNep5
         {
             var c = Blockchain.GetContract(to);
             return c == null || c.IsPayable;
+        }
+        #endregion
+
+        #region For Deserialization
+        //[DisplayName("testDeserialize")]
+        private static object[] DeserializeArgs(byte[] buffer)
+        {
+            var offset = 0;
+            var res = ReadVarBytes(buffer, offset);
+            var toAddress = res[0];
+
+            res = ReadUint255(buffer, (int)res[1]);
+            var amount = res[0];
+
+            return new object[] { toAddress, amount };
+        }
+
+        private static object[] ReadUint255(byte[] buffer, int offset)
+        {
+            if (offset + 32 > buffer.Length)
+            {
+                Runtime.Notify("Length is not long enough");
+                return new object[] { 0, -1 };
+            }
+            return new object[] { buffer.Range(offset, 32).ToBigInteger(), offset + 32 };
+        }
+
+        // return [BigInteger: value, int: offset]
+        private static object[] ReadVarInt(byte[] buffer, int offset)
+        {
+            var res = ReadBytes(buffer, offset, 1); // read the first byte
+            var fb = (byte[])res[0];
+            if (fb.Length != 1)
+            {
+                Runtime.Notify("Wrong length");
+                return new object[] { 0, -1 };
+            }
+            var newOffset = (int)res[1];
+            if (fb == new byte[] { 0xFD })
+            {
+                return new object[] { buffer.Range(newOffset, 2).ToBigInteger(), newOffset + 2 };
+            }
+            else if (fb == new byte[] { 0xFE })
+            {
+                return new object[] { buffer.Range(newOffset, 4).ToBigInteger(), newOffset + 4 };
+            }
+            else if (fb == new byte[] { 0xFF })
+            {
+                return new object[] { buffer.Range(newOffset, 8).ToBigInteger(), newOffset + 8 };
+            }
+            else
+            {
+                return new object[] { fb.ToBigInteger(), newOffset };
+            }
+        }
+
+        // return [byte[], new offset]
+        private static object[] ReadVarBytes(byte[] buffer, int offset)
+        {
+            var res = ReadVarInt(buffer, offset);
+            var count = (int)res[0];
+            var newOffset = (int)res[1];
+            return ReadBytes(buffer, newOffset, count);
+        }
+
+        // return [byte[], new offset]
+        private static object[] ReadBytes(byte[] buffer, int offset, int count)
+        {
+            if (offset + count > buffer.Length) throw new ArgumentOutOfRangeException();
+            return new object[] { buffer.Range(offset, count), offset + count };
+        }
+        #endregion
+
+        #region For Serialization
+        //[DisplayName("testSerialize")]
+        private static byte[] SerializeArgs(byte[] address, BigInteger amount)
+        {
+            var buffer = new byte[] { };
+            buffer = WriteVarBytes(address, buffer);
+            buffer = WriteUint255(amount, buffer);
+            return buffer;
+        }
+
+        private static byte[] WriteUint255(BigInteger value, byte[] source)
+        {
+            if (value < 0)
+            {
+                Runtime.Notify("Value out of range of uint255");
+                return source;
+            }
+            var v = PadRight(value.ToByteArray(), 32);
+            return source.Concat(v); // no need to concat length, fix 32 bytes
+        }
+
+        private static byte[] WriteVarInt(BigInteger value, byte[] Source)
+        {
+            if (value < 0)
+            {
+                return Source;
+            }
+            else if (value < 0xFD)
+            {
+                return Source.Concat(value.ToByteArray());
+            }
+            else if (value <= 0xFFFF) // 0xff, need to pad 1 0x00
+            {
+                byte[] length = new byte[] { 0xFD };
+                var v = PadRight(value.ToByteArray(), 2);
+                return Source.Concat(length).Concat(v);
+            }
+            else if (value <= 0XFFFFFFFF) //0xffffff, need to pad 1 0x00 
+            {
+                byte[] length = new byte[] { 0xFE };
+                var v = PadRight(value.ToByteArray(), 4);
+                return Source.Concat(length).Concat(v);
+            }
+            else //0x ff ff ff ff ff, need to pad 3 0x00
+            {
+                byte[] length = new byte[] { 0xFF };
+                var v = PadRight(value.ToByteArray(), 8);
+                return Source.Concat(length).Concat(v);
+            }
+        }
+
+        private static byte[] WriteVarBytes(byte[] value, byte[] Source)
+        {
+            return WriteVarInt(value.Length, Source).Concat(value);
+        }
+
+        // add padding zeros on the right
+        private static byte[] PadRight(byte[] value, int length)
+        {
+            var l = value.Length;
+            if (l > length)
+                return value.Range(0, length);
+            for (int i = 0; i < length - l; i++)
+            {
+                value = value.Concat(new byte[] { 0x00 });
+            }
+            return value;
         }
         #endregion
     }
