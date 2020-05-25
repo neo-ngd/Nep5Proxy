@@ -117,6 +117,7 @@ namespace Nep5Proxy
                 Runtime.Notify("Initial amount incorrect.");
                 return false;
             }
+
             StorageMap lockedAmount = Storage.CurrentContext.CreateMap(nameof(lockedAmount));
             lockedAmount.Put(fromAssetHash, initialAmount);
             BindAssetHashEvent(fromAssetHash, toChainId, toAssetHash, initialAmount);
@@ -215,7 +216,8 @@ namespace Nep5Proxy
 
             // update locked amount
             StorageMap lockedAmount = Storage.CurrentContext.CreateMap(nameof(lockedAmount));
-            lockedAmount.Put(fromAssetHash, GetLockedAmount(fromAssetHash) + amount);
+            BigInteger old = lockedAmount.Get(fromAssetHash).ToBigInteger();
+            lockedAmount.Put(fromAssetHash, old + amount);
 
             LockEvent(fromAssetHash, toChainId, toAssetHash, fromAddress, toAddress, amount);
 
@@ -283,7 +285,8 @@ namespace Nep5Proxy
 
             // update locked amount
             StorageMap lockedAmount = Storage.CurrentContext.CreateMap(nameof(lockedAmount));
-            lockedAmount.Put(assetHash, GetLockedAmount(assetHash) - amount);
+            BigInteger old = lockedAmount.Get(assetHash).ToBigInteger();
+            lockedAmount.Put(assetHash, old - amount);
 
             UnlockEvent(assetHash, toAddress, amount);
 
@@ -295,7 +298,7 @@ namespace Nep5Proxy
         public static BigInteger GetLockedAmount(byte[] fromAssetHash)
         {
             StorageMap lockedAmount = Storage.CurrentContext.CreateMap(nameof(lockedAmount));
-            BigInteger locked = lockedAmount.Get(fromAssetHash).AsBigInteger();
+            BigInteger locked = lockedAmount.Get(fromAssetHash).ToBigInteger();
             return locked;
         }
         
