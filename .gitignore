@@ -351,3 +351,4 @@ MigrationBackup/
 /Nep5Proxy.abi.json
 /Nep5Proxy.avm
 /Nep5Proxy.avmdbgnfo
+*.json

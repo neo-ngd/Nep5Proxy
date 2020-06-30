@@ -1,6 +1,0 @@
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockCCMC\bin\Debug\MockCCMC.dll
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockCCMC\bin\Debug\MockCCMC.pdb
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockCCMC\bin\Debug\Neo.SmartContract.Framework.dll
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockCCMC\obj\Debug\MockCCMC.csproj.CopyComplete
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockCCMC\obj\Debug\MockCCMC.dll
-C:\Users\Qrz\Documents\joeqian10\Nep5Proxy\MockCCMC\obj\Debug\MockCCMC.pdb

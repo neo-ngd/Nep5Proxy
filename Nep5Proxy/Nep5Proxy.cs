@@ -436,7 +436,8 @@ namespace Nep5Proxy
             }
             else if (value < 0xFD)
             {
-                return Source.Concat(value.ToByteArray());
+                var v = PadRight(value.ToByteArray(), 1);
+                return Source.Concat(v);
             }
             else if (value <= 0xFFFF) // 0xff, need to pad 1 0x00
             {
